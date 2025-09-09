@@ -1,9 +1,10 @@
-from django.shortcuts import render
-from django.http import HttpResponse
+from django.shortcuts import render, redirect
+from django.http import HttpResponseRedirect
 from django.views.generic import TemplateView, View
-from django.views import View
+from django.urls import reverse
+from django import forms
 
-# Create your views here.
+
 class HomePageView(TemplateView):
     template_name = "pages/home.html"
 
@@ -48,10 +49,11 @@ class ProductIndexView(View):
     template_name = "products/index.html"
 
     def get(self, request):
-        viewData = {}
-        viewData["title"] = "Products - Online Store"
-        viewData["subtitle"] = "List of products"
-        viewData["products"] = Product.products
+        viewData = {
+            "title": "Products - Online Store",
+            "subtitle": "List of products",
+            "products": Product.products,
+        }
         return render(request, self.template_name, viewData)
 
 
@@ -59,9 +61,53 @@ class ProductShowView(View):
     template_name = "products/show.html"
 
     def get(self, request, id):
-        viewData = {}
-        product = Product.products[int(id) - 1]
-        viewData["title"] = product["name"] + " - Online Store"
-        viewData["subtitle"] = product["name"] + " - Product information"
-        viewData["product"] = product
+        try:
+            product = Product.products[int(id) - 1]
+        except (IndexError, ValueError):
+            return HttpResponseRedirect(reverse("home"))
+
+        viewData = {
+            "title": product["name"] + " - Online Store",
+            "subtitle": product["name"] + " - Product information",
+            "product": product,
+        }
         return render(request, self.template_name, viewData)
+
+
+class ProductForm(forms.Form):
+    name = forms.CharField(required=True)
+    price = forms.FloatField(required=True)
+
+    def clean_price(self):
+        price = self.cleaned_data.get("price")
+        if price is not None and price <= 0:
+            raise forms.ValidationError("El precio debe ser mayor a 0.")
+        return price
+
+
+class ProductCreateView(View):
+    template_name = "products/create.html"
+
+    def get(self, request):
+        form = ProductForm()
+        viewData = {
+            "title": "Create product",
+            "form": form,
+        }
+        return render(request, self.template_name, viewData)
+
+    def post(self, request):
+        form = ProductForm(request.POST)
+        if form.is_valid():
+            viewData = {
+                "title": "Product Created",
+                "name": form.cleaned_data["name"],
+                "price": form.cleaned_data["price"],
+            }
+            return render(request, "products/created.html", viewData)
+        else:
+            viewData = {
+                "title": "Create product",
+                "form": form,
+            }
+            return render(request, self.template_name, viewData)
